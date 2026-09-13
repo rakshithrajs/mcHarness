@@ -3,6 +3,7 @@ from typing import cast
 
 from openai.types.chat import ChatCompletionMessageParam
 
+from context import context
 from llm.llm import SYSTEM_PROMPT, call_llm
 from tools.tools import TOOLS
 import utils.printer as printer
@@ -19,7 +20,9 @@ def run_agent() -> None:
     turn = 0
     while True:
         turn += 1
-        message, usage = call_llm(messages)
+        message, usage = call_llm(
+            messages + [cast(ChatCompletionMessageParam, context.reminder())]
+        )
         messages.append(
             cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True))
         )

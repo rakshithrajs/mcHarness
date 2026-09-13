@@ -1,6 +1,7 @@
 import subprocess
 from typing import Callable, Iterable
 from openai.types.chat import ChatCompletionToolParam
+from context import context
 from skills.skills import read_skill
 
 TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
@@ -124,6 +125,7 @@ def bash(command: str):
 
 def read_file(path: str) -> str:
     """read a file and return its contents."""
+    context.note_read(path)
     with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
 
