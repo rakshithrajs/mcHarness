@@ -98,10 +98,10 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
                     },
                     "line_number": {
                         "type": "integer",
-                        "description": "line_number specifies the the number of the line that you want to edit in the file.",
+                        "description": "Optional line number to scope the replacement to. Use only when old_str appears on multiple lines.",
                     },
                 },
-                "required": ["path", "old_str", "new_str", "line_number"],
+                "required": ["path", "old_str", "new_str"],
             },
         },
     },
@@ -139,31 +139,47 @@ def str_replace(
     path: str,
     old_str: str,
     new_str: str,
-    line_number: int,
+    line_number: int | None = None,
 ):
-    """Replace old_str with new_str on a specific line of a file."""
+    """Replace old_str with new_str in a file.
+
+    If line_number is provided, the match is scoped to that line.
+    Otherwise old_str must be unique in the entire file.
+    """
     with open(path, "r", encoding="utf-8") as f:
-        content = f.read()
+        lines = f.readlines()
 
-    content_lines = content.splitlines(keepends=True)
-    if not (0 <= line_number < len(content_lines)):
-        return f"Error: line_number {line_number} is out of range for {path}"
+    if line_number is not None:
+        if not (0 <= line_number < len(lines)):
+            return f"Error: line_number {line_number} is out of range for {path}"
 
-    line = content_lines[line_number]
-    count = line.count(old_str)
-    if count == 0:
-        return f"Error: old_str was not found on line {line_number} in {path}"
-    if count > 1:
-        return (
-            f"Error: old_str matches {count} times on line {line_number} in {path}. "
-            "Add surrounding context to make it unique."
-        )
+        line = lines[line_number]
+        count = line.count(old_str)
+        if count == 0:
+            return f"Error: old_str was not found on line {line_number} in {path}"
+        if count > 1:
+            return (
+                f"Error: old_str matches {count} times on line {line_number} in {path}. "
+                "Add surrounding context to make it unique."
+            )
 
-    content_lines[line_number] = line.replace(old_str, new_str)
+        lines[line_number] = line.replace(old_str, new_str, 1)
+    else:
+        content = "".join(lines)
+        count = content.count(old_str)
+        if count == 0:
+            return f"Error: old_str was not found in {path}"
+        if count > 1:
+            return (
+                f"Error: old_str matches {count} times in {path}. "
+                "Add line_number or surrounding context to make it unique."
+            )
+
+        lines = content.replace(old_str, new_str, 1).splitlines(keepends=True)
 
     with open(path, "w", encoding="utf-8") as f:
-        f.write("".join(content_lines))
-    return f"Replaced {count} match(es) on line {line_number} in {path}"
+        f.writelines(lines)
+    return f"Replaced {count} match(es) in {path}"
 
 
 # The argument name differs between tools (`command` vs. `path`), and the

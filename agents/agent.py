@@ -36,7 +36,10 @@ def run_agent() -> None:
                 function_name = i.function.name
                 function_arguments = json.loads(i.function.arguments)
                 function = TOOLS[function_name]
-                result = function(**function_arguments)
+                try:
+                    result = function(**function_arguments)
+                except Exception as e:
+                    result = f"Error: {type(e).__name__}: {e}"
 
                 printer.tool_call(function_name, function_arguments, turn=turn)
                 printer.tool_result(result)
