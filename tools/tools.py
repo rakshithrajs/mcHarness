@@ -96,13 +96,12 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
                         "type": "string",
                         "description": "new_str is the string that will replace the old_str in the file.",
                     },
-                    "allow_multi_edit": {
-                        "type": "boolean",
-                        "default": "false",
-                        "description": "allow_multi_edit is a flag that will allow to edit multiple occurences of the same old_str.",
+                    "line_number": {
+                        "type": "integer",
+                        "description": "line_number specifies the the number of the line that you want to edit in the file.",
                     },
                 },
-                "required": ["path", "old_str", "new_str"],
+                "required": ["path", "old_str", "new_str", "line_number"],
             },
         },
     },
@@ -136,24 +135,35 @@ def write_file(path: str, content: str) -> str:
     return f"Wrote {path}"
 
 
-def str_replace(path: str, old_str: str, new_str: str, allow_multi_edit: bool = False):
-    """Swap exact text in a file. old_str must match exactly once."""
-    with open(path, "w", encoding="utf-8") as f:
+def str_replace(
+    path: str,
+    old_str: str,
+    new_str: str,
+    line_number: int,
+):
+    """Replace old_str with new_str on a specific line of a file."""
+    with open(path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    count = content.count(old_str)
+    content_lines = content.splitlines(keepends=True)
+    if not (0 <= line_number < len(content_lines)):
+        return f"Error: line_number {line_number} is out of range for {path}"
+
+    line = content_lines[line_number]
+    count = line.count(old_str)
     if count == 0:
-        return f"Error: old_str want not found in {path}"
-    if count > 1 and not allow_multi_edit:
+        return f"Error: old_str was not found on line {line_number} in {path}"
+    if count > 1:
         return (
-            f"Error: old_str matches {count} time in {path}."
-            "Add surrounding lines to make it unique."
-            "or set allow_multi_edit to replace them all."
+            f"Error: old_str matches {count} times on line {line_number} in {path}. "
+            "Add surrounding context to make it unique."
         )
 
+    content_lines[line_number] = line.replace(old_str, new_str)
+
     with open(path, "w", encoding="utf-8") as f:
-        f.write(content.replace(old_str, new_str))
-    return f"Replaced {count} match(es) in {path}"
+        f.write("".join(content_lines))
+    return f"Replaced {count} match(es) on line {line_number} in {path}"
 
 
 # The argument name differs between tools (`command` vs. `path`), and the
