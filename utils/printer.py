@@ -119,3 +119,8 @@ def error(message: str) -> None:
 def raw_json(data: Any) -> None:
     """Render any JSON-serializable object with syntax highlighting."""
     console.print(JSON.from_data(data))
+
+
+def debug(data: Any) -> None:
+    """Render debug lines"""
+    console.log(data)

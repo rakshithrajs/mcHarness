@@ -6,7 +6,9 @@ from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
 
+from skills.skills import skills_prompt
 import tools.tools as tools
+from utils import printer
 
 dotenv.load_dotenv()
 
@@ -18,15 +20,23 @@ Use the bash tool to inspect files.
 Answer back to the user once exploration is done.
 
 Your current working directory is: {os.getcwd()}
+
+You have skills available. Each one is a set of instructions for a task. 
+If a skill matches what the user wants, call read_skill first and follow it. 
+
+{skills_prompt()}
 """
 
 
 def call_llm(
     messages: Iterable[ChatCompletionMessageParam],
 ) -> tuple[ChatCompletionMessage, dict[str, str | None]]:
+    mess = list(messages)
+    printer.debug(data=mess[-1])
     response = client.chat.completions.create(
         model=os.environ.get("OLLAMA_LANG_MODEL", default="glm-5.1:cloud"),
         messages=messages,
+        reasoning_effort="low",
         tools=tools.TOOL_SCHEMAS,
     )
 
