@@ -1,7 +1,10 @@
 import os
-import json
 import dotenv
+from typing import Iterable
+
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
+from openai.types.chat.chat_completion_message import ChatCompletionMessage
 
 import tools.tools as tools
 
@@ -9,27 +12,25 @@ dotenv.load_dotenv()
 
 client = OpenAI(base_url=os.getenv("OLLAMA_HOST"), api_key=os.getenv("OLLAMA_API_KEY"))
 
+SYSTEM_PROMPT = f"""
+You are a coding agent. Your job is to code, always code.
+Use the bash tool to inspect files.
+Answer back to the user once exploration is done.
 
-def run_agent():
-    user_input = input("Enter your prompt: ")
+Your current working directory is: {os.getcwd()}
+"""
 
-    SYSTEM_PROMPT = """
-    You are a coding agent. Your job is to code, always code.
-    Use the bash tool to inspect files.
-    Anser back to the user once exploration is done.
-    """
 
+def call_llm(
+    messages: Iterable[ChatCompletionMessageParam],
+) -> tuple[ChatCompletionMessage, dict[str, str | None]]:
     response = client.chat.completions.create(
         model=os.environ.get("OLLAMA_LANG_MODEL", default="glm-5.1:cloud"),
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_input},
-        ],
+        messages=messages,
         tools=tools.TOOL_SCHEMAS,
     )
 
     message = response.choices[0].message
-    output = message.content
 
     completetion_details = getattr(response.usage, "completion_tokens_details", None)
     prompt_details = getattr(response.usage, "prompt_tokens_details", None)
@@ -41,21 +42,13 @@ def run_agent():
         "reasoning_tokens": getattr(completetion_details, "reasoning_tokens", None),
         "cached_tokens": getattr(completetion_details, "cached_tokens", None),
     }
-    print("\nAgent: ", output, "\n")
-
-    if message.tool_calls:
-        for i in message.tool_calls:
-            if i.type == "function":
-                function_name = i.function.name
-                function_arguments = json.loads(i.function.arguments)
-                function = getattr(tools, function_name)
-                print(
-                    f"Function tool: {function_name}; parameters: {function_arguments}"
-                )
-                print(function(**function_arguments), "\n")
-
-    print(usage)
+    return message, usage
 
 
 if __name__ == "__main__":
-    run_agent()
+    call_llm(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": "hi how are you"},
+        ]
+    )

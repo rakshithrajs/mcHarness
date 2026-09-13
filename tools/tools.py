@@ -1,5 +1,5 @@
 import subprocess
-from typing import Iterable
+from typing import Callable, Iterable
 from openai.types.chat import ChatCompletionToolParam
 
 TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
@@ -56,3 +56,11 @@ def read_file(path: str) -> str:
     """read a file and return its contents."""
     with open(path) as f:
         return f.read()
+
+
+# The argument name differs between tools (`command` vs. `path`), and the
+# dispatcher invokes each tool with keyword arguments unpacked from JSON.
+TOOLS: dict[str, Callable[..., str]] = {
+    TOOL_SCHEMAS[0]["function"]["name"]: bash,
+    TOOL_SCHEMAS[1]["function"]["name"]: read_file,
+}

@@ -22,4 +22,4 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["utils", "llm", "tools"]
+packages = ["utils", "llm", "tools", "agents"]

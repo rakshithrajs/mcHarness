@@ -16,7 +16,7 @@ def agent_message(content: str, turn: int = 0) -> None:
     """Render the agent's response in a styled panel."""
     title = f"Agent — Turn {turn}" if turn else "Agent"
     panel = Panel(
-        Markdown(content),
+        renderable=Markdown(content),
         title=title,
         title_align="left",
         border_style="green",
@@ -30,7 +30,7 @@ def tool_call(name: str, args: dict[str, Any], turn: int = 0) -> None:
     title = f"Tool Call — Turn {turn}" if turn else "Tool Call"
     args_text = json.dumps(args, indent=2, ensure_ascii=False)
     panel = Panel(
-        Markdown(f"**{name}**\n\n```json\n{args_text}\n```"),
+        renderable=Markdown(f"**{name}**\n\n```json\n{args_text}\n```"),
         title=title,
         title_align="left",
         border_style="yellow",
@@ -47,7 +47,7 @@ def tool_result(result: str) -> None:
     else:
         content = f"`{result}`"
     panel = Panel(
-        Markdown(content),
+        renderable=Markdown(content),
         title="Tool Result",
         title_align="left",
         border_style="cyan",
@@ -107,7 +107,7 @@ def status(message: str) -> None:
 def error(message: str) -> None:
     """Render an error in a red panel."""
     panel = Panel(
-        Text(message, style="bold red"),
+        renderable=Text(message, style="bold red"),
         title="Error",
         title_align="left",
         border_style="red",
