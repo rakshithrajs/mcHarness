@@ -1,5 +1,7 @@
 from llm.llm import client
+import utils.printer as printer
 
 
 def status():
-    print(client.models.list().model_dump_json(indent=2))
+    models = client.models.list().data
+    printer.models_table(models)

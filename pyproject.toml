@@ -7,10 +7,12 @@ requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
     "openai>=3.13.0",
+    "rich>=15.0.0",
 ]
 
 [project.scripts]
 status = "utils.helpers:status"
+harness = "main:main"
 
 [build-system]
 requires = ["hatchling"]
