@@ -1,10 +1,23 @@
 [project]
 name = "harness"
 version = "0.1.0"
-description = "Add your description here"
+description = "harness the power."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
     "openai>=3.13.0",
 ]
+
+[project.scripts]
+status = "utils.helpers:status"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["utils", "llm", "tools"]
