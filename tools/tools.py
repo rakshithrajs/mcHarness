@@ -2,8 +2,12 @@ import subprocess
 from typing import Callable, Iterable
 from openai.types.chat import ChatCompletionToolParam
 from context import context
+from security import PermissionManager, SecurityError
+from security.permissions import RiskLevel
 from skills.skills import read_skill
 from tools.todos import write_todos
+
+PERMISSIONS = PermissionManager.from_environment()
 
 TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
     {
@@ -149,6 +153,12 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
 
 def bash(command: str):
     """Run a shell command and return its combined stdout and stderr."""
+    decision = PERMISSIONS.check_shell(command)
+    if decision.risk == RiskLevel.BLOCKED:
+        raise SecurityError(decision.reason)
+    if not PERMISSIONS.confirm(decision):
+        raise SecurityError("user denied shell command")
+
     result = subprocess.run(
         command,
         shell=True,
@@ -163,6 +173,12 @@ def bash(command: str):
 
 def read_file(path: str) -> str:
     """read a file and return its contents."""
+    decision = PERMISSIONS.check_path(path, "read")
+    if decision.risk == RiskLevel.BLOCKED:
+        raise SecurityError(decision.reason)
+    if not PERMISSIONS.confirm(decision):
+        raise SecurityError("user denied file read")
+
     context.note_read(path)
     with open(path, encoding="utf-8", errors="replace") as f:
         return f.read()
@@ -170,6 +186,12 @@ def read_file(path: str) -> str:
 
 def write_file(path: str, content: str) -> str:
     """Create a file, or overwrite it if already exists."""
+    decision = PERMISSIONS.check_path(path, "write")
+    if decision.risk == RiskLevel.BLOCKED:
+        raise SecurityError(decision.reason)
+    if not PERMISSIONS.confirm(decision):
+        raise SecurityError("user denied file write")
+
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)
     return f"Wrote {path}"
@@ -186,6 +208,12 @@ def str_replace(
     If line_number is provided, the match is scoped to that line.
     Otherwise old_str must be unique in the entire file.
     """
+    decision = PERMISSIONS.check_path(path, "edit")
+    if decision.risk == RiskLevel.BLOCKED:
+        raise SecurityError(decision.reason)
+    if not PERMISSIONS.confirm(decision):
+        raise SecurityError("user denied file edit")
+
     with open(path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 

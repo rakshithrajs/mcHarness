@@ -5,6 +5,7 @@ from openai.types.chat import ChatCompletionMessageParam
 
 from context import context
 from llm.llm import SYSTEM_PROMPT, call_llm
+from security import SecurityError
 from tools.tools import TOOLS
 import utils.printer as printer
 
@@ -41,6 +42,9 @@ def run_agent() -> None:
                 function = TOOLS[function_name]
                 try:
                     result = function(**function_arguments)
+                except SecurityError as e:
+                    result = f"SecurityError: {e.reason}"
+                    printer.security_block(function_name, function_arguments, str(e.reason))
                 except Exception as e:
                     result = f"Error: {type(e).__name__}: {e}"
 

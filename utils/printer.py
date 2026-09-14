@@ -56,6 +56,20 @@ def tool_result(result: str) -> None:
     console.print(panel)
 
 
+def security_block(name: str, args: dict[str, Any], reason: str) -> None:
+    """Render a security rejection for a tool call."""
+    args_text = json.dumps(args, indent=2, ensure_ascii=False)
+    content = f"**{name}** was blocked.\n\nReason: `{reason}`\n\nArguments:\n```json\n{args_text}\n```"
+    panel = Panel(
+        renderable=Markdown(content),
+        title="Security Block",
+        title_align="left",
+        border_style="red",
+        box=ROUNDED,
+    )
+    console.print(panel)
+
+
 def usage_stats(usage: dict[str, Any]) -> None:
     """Render token usage as a compact table."""
     table = Table(

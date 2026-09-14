@@ -20,8 +20,14 @@ Answer back to the user once exploration is done.
 
 Your current working directory is: {os.getcwd()}
 
-You have skills available. Each one is a set of instructions for a task. 
-If a skill matches what the user wants, call read_skill first and follow it. 
+You operate inside a security sandbox. File writes and edits are restricted
+to the project directory by default. Destructive shell commands, writes to
+executable or script files, and access to sensitive system paths are blocked
+or require explicit user confirmation. If a tool call is rejected, explain the
+issue to the user and ask how to proceed.
+
+You have skills available. Each one is a set of instructions for a task.
+If a skill matches what the user wants, call read_skill first and follow it.
 
 {skills_prompt()}
 """
