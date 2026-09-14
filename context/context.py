@@ -1,6 +1,7 @@
 import os
 import subprocess
 from datetime import datetime
+from tools.todos import todo_prompt
 
 SEEN: dict[str, float] = {}
 
@@ -11,6 +12,11 @@ def note_read(path: str):
 
 def stale_files() -> list[str]:
     return [p for p, mtime in SEEN.items() if os.path.getmtime(p) != mtime]
+
+
+def todos_note():
+    plan = todo_prompt()
+    return f"\n<todos>\n{plan}\n</todos>" if plan else ""
 
 
 def git_branch():
@@ -34,7 +40,9 @@ def reminder():
             f"time {datetime.now():%Y-%m-%d %H:%M}\n"
             f"git branch: {git_branch()}\n"
             "</env>"
-        ),
+        )
+        + stale_note()
+        + todos_note(),
     }
 
 
