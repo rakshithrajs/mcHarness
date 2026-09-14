@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Callable
 
 import yaml
 
@@ -130,6 +131,8 @@ class PermissionManager:
         self.config = config or _default_config()
         self._approved_families: set[str] = set()
         self._blocked_families: set[str] = set()
+        self._pause_hook: Callable[[], None] | None = None
+        self._resume_hook: Callable[[], None] | None = None
 
     @classmethod
     def from_environment(cls, project_root: Path | None = None) -> "PermissionManager":
@@ -308,7 +311,7 @@ class PermissionManager:
         print(f"  Reason:  {decision.reason}")
 
         try:
-            answer = input("Allow? [y/n/always/block]: ").strip().lower()
+            answer = self._run_input("Allow? [y/n/always/block]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print("  -> denied (no input)")
             return False
@@ -322,6 +325,25 @@ class PermissionManager:
             self._blocked_families.add(family)
             return False
         return False
+
+    def set_prompt_hooks(
+        self,
+        pause: Callable[[], None] | None = None,
+        resume: Callable[[], None] | None = None,
+    ) -> None:
+        """Register hooks to pause/resume live terminal rendering around ``input()`` prompts."""
+        self._pause_hook = pause
+        self._resume_hook = resume
+
+    def _run_input(self, prompt: str) -> str:
+        """Run ``input()`` safely when a live display may be active."""
+        if self._pause_hook:
+            self._pause_hook()
+        try:
+            return input(prompt)
+        finally:
+            if self._resume_hook:
+                self._resume_hook()
 
     def require_approval(self, decision: SecurityDecision) -> None:
         if not self.confirm(decision):
