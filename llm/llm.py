@@ -50,7 +50,8 @@ dotenv.load_dotenv()
 _ollama_headers = {"Authorization": "Bearer " + os.environ.get("OLLAMA_API_KEY", "")}
 ollama_client = Client(host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers)
 ollama_async_client = AsyncClient(
-    host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers,
+    host=os.getenv("OLLAMA_HOST"),
+    headers=_ollama_headers,
 )
 
 _chat: ChatCallable = ollama_client.chat  # type: ignore[assignment]
@@ -127,6 +128,7 @@ class Options:
     options: OllamaOptions | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
+        """Construct the options dictionary from the above fields."""
         if self.model is None:
             self.model = os.environ.get("OLLAMA_LANG_MODEL", default="glm")
 
@@ -153,6 +155,7 @@ class BaseAgent:
     """Stateful agent that manages conversation history and tool calling."""
 
     def __init__(self, options: Options) -> None:
+        """Initialize the agent with the given options."""
         options.model = model_select(
             options.model or os.environ.get("OLLAMA_LANG_MODEL", default="glm"),
         )
@@ -215,7 +218,7 @@ class BaseAgent:
 
     async def chat_async(self) -> ChatResponse:
         """Start an async non-streaming chat session with the agent."""
-        response = await _chat_async(
+        return await _chat_async(
             model=cast(str, self.options.model),
             messages=self._build_messages(),
             tools=self.options.tools,
@@ -224,7 +227,6 @@ class BaseAgent:
             format=self.options.format,
             options=self.options.options,
         )
-        return response
 
     async def chat_stream_async(self) -> AsyncIterator[ChatResponse]:
         """Start an async streaming chat session with the agent."""
@@ -266,7 +268,7 @@ class BaseAgent:
 
     async def generate_async(self, prompt: str) -> GenerateResponse:
         """Generate an async non-streaming response for the given prompt."""
-        response = await _generate_async(
+        return await _generate_async(
             model=cast(str, self.options.model),
             prompt=prompt,
             system=self.options.system_prompt,
@@ -275,10 +277,10 @@ class BaseAgent:
             format=self.options.format,
             options=self.options.options,
         )
-        return response
 
     async def generate_stream_async(
-        self, prompt: str,
+        self,
+        prompt: str,
     ) -> AsyncIterator[GenerateResponse]:
         """Generate an async streaming response for the given prompt."""
         stream = await _generate_stream_async(
@@ -300,10 +302,11 @@ class BaseAgent:
             return f"Error: unknown tool {name}"
         try:
             raw_arguments = call.function.arguments
-            if isinstance(raw_arguments, str):
-                arguments = json.loads(raw_arguments)
-            else:
-                arguments = dict(raw_arguments)
+            arguments = (
+                json.loads(raw_arguments)
+                if isinstance(raw_arguments, str)
+                else dict(raw_arguments)
+            )
             return str(tools.TOOLS[name](**arguments))
         except SecurityError as e:
             return f"SecurityError: {e.reason}"

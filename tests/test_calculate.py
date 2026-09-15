@@ -5,6 +5,7 @@ import math
 import pytest
 
 from tools.calculate import calculate
+from tools.tools import OLLAMA_TOOLS, TOOLS
 
 
 @pytest.mark.parametrize(
@@ -148,15 +149,11 @@ def test_no_arbitrary_code_execution() -> None:
 
 def test_calculate_is_registered_as_tool() -> None:
     """Test that calculate is registered in the TOOLS dispatch dict."""
-    from tools.tools import TOOLS
-
     assert "calculate" in TOOLS
     assert TOOLS["calculate"] is calculate
 
 
 def test_calculate_in_ollama_tools() -> None:
     """Test that calculate appears in the OLLAMA_TOOLS list."""
-    from tools.tools import OLLAMA_TOOLS
-
     tool_names = [t.function.name for t in OLLAMA_TOOLS]  # type: ignore[attr-defined]
     assert "calculate" in tool_names

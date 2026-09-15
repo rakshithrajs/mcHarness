@@ -7,6 +7,7 @@ MODEL_FILE_PATH = Path(__file__).resolve().parent.parent / "config" / "models.js
 
 
 def model_select(model_name: str) -> str:
+    """Select a model based on the provided name or alias."""
     try:
         with open(MODEL_FILE_PATH, encoding="utf-8") as file:
             models: dict[str, str] = json.load(file)
