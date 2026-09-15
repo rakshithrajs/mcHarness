@@ -24,16 +24,6 @@ build-backend = "hatchling.build"
 [tool.uv]
 package = true
 
-[tool.uv.scripts]
-lint = "ruff check ."
-format = "ruff check . --fix"
-test = "pytest --maxfail=1 --disable-warnings -q"
-all = [
-    "tool.uv.scripts:format",
-    "tool.uv.scripts:lint",
-    "tool.uv.scripts:test",
-]
-
 [tool.hatch.build.targets.wheel]
 packages = ["agents", "context", "llm", "security", "skills", "tools", "utils"]
 
