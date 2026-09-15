@@ -188,6 +188,10 @@ class TodoFooter:
         self._live.start()
         return self
 
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Stop live updates on exit."""
+        self.pause()
+
     def pause(self) -> None:
         """Stop live updates for interactive prompts."""
         if self._live:

@@ -2,7 +2,14 @@
 
 import json
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional, Union, cast
 
@@ -42,7 +49,9 @@ dotenv.load_dotenv()
 # `ollama.chat` helper defaults to localhost:11434, which is wrong for cloud models.
 _ollama_headers = {"Authorization": "Bearer " + os.environ.get("OLLAMA_API_KEY", "")}
 _ollama_client = Client(host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers)
-_ollama_async_client = AsyncClient(host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers)
+_ollama_async_client = AsyncClient(
+    host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers
+)
 
 _chat: ChatCallable = _ollama_client.chat  # type: ignore[assignment]
 _chat_stream: ChatStreamCallable = _ollama_client.chat  # type: ignore[assignment]
@@ -119,7 +128,7 @@ class Options:
 
     def __post_init__(self) -> None:
         if self.model is None:
-            self.model = os.environ.get("OLLAMA_LANG_MODEL", default="glm-5.1:cloud")
+            self.model = os.environ.get("OLLAMA_LANG_MODEL", default="glm")
 
         opts = cast(OllamaOptions, {})
         if self.temperature is not None:
@@ -144,7 +153,9 @@ class BaseAgent:
     """Stateful agent that manages conversation history and tool calling."""
 
     def __init__(self, options: Options) -> None:
-        options.model = model_select(options.model or os.environ.get("OLLAMA_LANG_MODEL", default="glm-5.1:cloud"))
+        options.model = model_select(
+            options.model or os.environ.get("OLLAMA_LANG_MODEL", default="glm")
+        )
         self.options = options
         self.messages: list[Union[Mapping[str, Any], OllamaMessage]] = []
         if options.system_prompt:
@@ -170,7 +181,9 @@ class BaseAgent:
         """Clear history and re-inject the system prompt if configured."""
         self.messages.clear()
         if self.options.system_prompt:
-            self.messages.append({"role": "system", "content": self.options.system_prompt})
+            self.messages.append(
+                {"role": "system", "content": self.options.system_prompt}
+            )
 
     def _build_messages(self) -> list[Union[Mapping[str, Any], OllamaMessage]]:
         """Return current messages with the latest context reminder appended."""
@@ -264,7 +277,9 @@ class BaseAgent:
         )
         return response
 
-    async def generate_stream_async(self, prompt: str) -> AsyncIterator[GenerateResponse]:
+    async def generate_stream_async(
+        self, prompt: str
+    ) -> AsyncIterator[GenerateResponse]:
         """Generate an async streaming response for the given prompt."""
         stream = await _generate_stream_async(
             model=cast(str, self.options.model),

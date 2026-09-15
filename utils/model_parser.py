@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-MODEL_FILE_PATH = Path(__file__).resolve().parent / "config" / "models.json"
+MODEL_FILE_PATH = Path(__file__).resolve().parent.parent / "config" / "models.json"
 
 
 def model_select(model_name: str) -> str:
@@ -15,10 +15,9 @@ def model_select(model_name: str) -> str:
             f"Model file not found at {MODEL_FILE_PATH}. Please ensure the file exists."
         )
 
-    if model_name not in models:
-        available = ", ".join(models.keys())
-        raise ValueError(
-            f"Model '{model_name}' not found in models.json. Available models: {available}"
-        )
+    if model_name in models:
+        return models[model_name]
 
-    return models[model_name]
+    # If the name isn't a configured alias, treat it as a direct model reference
+    # (e.g. "glm-5.1:cloud") and pass it through unchanged.
+    return model_name
