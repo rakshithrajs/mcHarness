@@ -5,7 +5,8 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from typing import cast
 
 import yaml
 
@@ -128,6 +129,12 @@ def _load_config_file(path: Path) -> dict[str, object]:
 
 def _resolve_path(path: str | Path, root: Path) -> Path:
     target = Path(path)
+    path_str = str(path)
+    # Windows absolute paths (e.g. C:\foo) are not recognized as absolute by
+    # pathlib when running on POSIX. Normalize them to absolute paths on the
+    # current OS so they are not incorrectly resolved relative to the project root.
+    if not target.is_absolute() and PureWindowsPath(path_str).is_absolute():
+        target = Path("/") / PureWindowsPath(path_str).as_posix()
     if target.is_absolute():
         return target.resolve()
     return (root / target).resolve()
@@ -155,20 +162,28 @@ class PermissionManager:
         overrides = _load_config_file(file_path)
 
         if "project_root" in overrides:
-            config.project_root = Path(overrides["project_root"]).expanduser().resolve()
+            config.project_root = Path(
+                cast(str, overrides["project_root"]),
+            ).expanduser().resolve()
         if "sensitive_paths" in overrides:
-            config.sensitive_paths = overrides["sensitive_paths"]
+            config.sensitive_paths = cast(
+                list[str], overrides["sensitive_paths"],
+            )
         if "blocked_shell_tokens" in overrides:
-            config.blocked_shell_tokens = overrides["blocked_shell_tokens"]
+            config.blocked_shell_tokens = cast(
+                list[str], overrides["blocked_shell_tokens"],
+            )
         if "blocked_write_extensions" in overrides:
-            config.blocked_write_extensions = overrides["blocked_write_extensions"]
+            config.blocked_write_extensions = cast(
+                list[str], overrides["blocked_write_extensions"],
+            )
         if "outside_root_write_policy" in overrides:
             config.outside_root_write_policy = RiskLevel(
-                overrides["outside_root_write_policy"],
+                cast(str, overrides["outside_root_write_policy"]),
             )
         if "outside_root_read_policy" in overrides:
             config.outside_root_read_policy = RiskLevel(
-                overrides["outside_root_read_policy"],
+                cast(str, overrides["outside_root_read_policy"]),
             )
 
         return cls(config)
