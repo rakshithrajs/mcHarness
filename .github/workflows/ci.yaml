@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv install --no-dev
+          uv sync
 
       - name: Run tests
         run: |
