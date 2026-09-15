@@ -1,14 +1,18 @@
+"""Security permission management for the harness agent."""
+
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Callable
 
 import yaml
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
+    """Risk levels for security decisions."""
+
     SAFE = "safe"
     PROMPT = "prompt"
     BLOCKED = "blocked"
@@ -17,13 +21,16 @@ class RiskLevel(str, Enum):
 class SecurityError(Exception):
     """Raised when a tool call is rejected by the permission manager."""
 
-    def __init__(self, reason: str):
+    def __init__(self, reason: str) -> None:
+        """Initialize the SecurityError with a reason."""
         super().__init__(reason)
         self.reason = reason
 
 
 @dataclass
 class SecurityDecision:
+    """Result of a security check, including risk level and reason."""
+
     risk: RiskLevel
     reason: str
     path: str | None = None
@@ -32,6 +39,8 @@ class SecurityDecision:
 
 @dataclass
 class SecurityConfig:
+    """Configuration for the permission manager."""
+
     project_root: Path = field(default_factory=lambda: Path(os.getcwd()).resolve())
     sensitive_paths: list[str] = field(default_factory=list[str])
     blocked_shell_tokens: list[str] = field(default_factory=list[str])
@@ -127,7 +136,8 @@ def _resolve_path(path: str | Path, root: Path) -> Path:
 class PermissionManager:
     """Application-layer guard for agent tool calls."""
 
-    def __init__(self, config: SecurityConfig | None = None):
+    def __init__(self, config: SecurityConfig | None = None) -> None:
+        """Initialize the permission manager with a configuration."""
         self.config = config or _default_config()
         self._approved_families: set[str] = set()
         self._blocked_families: set[str] = set()
@@ -136,6 +146,7 @@ class PermissionManager:
 
     @classmethod
     def from_environment(cls, project_root: Path | None = None) -> "PermissionManager":
+        """Load configuration from environment and .security.yml file."""
         config = _default_config()
         if project_root is not None:
             config.project_root = project_root.resolve()
@@ -153,11 +164,11 @@ class PermissionManager:
             config.blocked_write_extensions = overrides["blocked_write_extensions"]
         if "outside_root_write_policy" in overrides:
             config.outside_root_write_policy = RiskLevel(
-                overrides["outside_root_write_policy"]
+                overrides["outside_root_write_policy"],
             )
         if "outside_root_read_policy" in overrides:
             config.outside_root_read_policy = RiskLevel(
-                overrides["outside_root_read_policy"]
+                overrides["outside_root_read_policy"],
             )
 
         return cls(config)
@@ -180,10 +191,10 @@ class PermissionManager:
 
     def _family(self, command: str) -> str:
         """Extract a simple family name for 'always' / 'never' prompts."""
-        first = command.strip().split()[0].lower() if command.strip() else ""
-        return first
+        return command.strip().split()[0].lower() if command.strip() else ""
 
     def check_shell(self, command: str) -> SecurityDecision:
+        """Check a shell command for potential security risks."""
         if not command or not command.strip():
             return SecurityDecision(RiskLevel.SAFE, "empty command")
 
@@ -247,10 +258,13 @@ class PermissionManager:
                 )
 
         return SecurityDecision(
-            RiskLevel.SAFE, "command passed heuristic checks", command=command
+            RiskLevel.SAFE,
+            "command passed heuristic checks",
+            command=command,
         )
 
     def check_path(self, path: str | Path, operation: str) -> SecurityDecision:
+        """Check a file path for potential security risks based on the operation."""
         resolved = _resolve_path(path, self.config.project_root)
 
         if self._is_sensitive(resolved):
@@ -288,10 +302,13 @@ class PermissionManager:
                 )
 
         return SecurityDecision(
-            RiskLevel.SAFE, f"{operation} allowed", path=str(resolved)
+            RiskLevel.SAFE,
+            f"{operation} allowed",
+            path=str(resolved),
         )
 
     def confirm(self, decision: SecurityDecision) -> bool:
+        """Prompt the user for approval if the decision is not safe."""
         if decision.risk == RiskLevel.BLOCKED:
             return False
         if decision.risk == RiskLevel.SAFE:
@@ -303,6 +320,10 @@ class PermissionManager:
         if family in self._blocked_families:
             return False
 
+        self._print_decision(decision)
+        return self._handle_confirm_prompt(family)
+
+    def _print_decision(self, decision: SecurityDecision) -> None:
         print("\n[SECURITY] The agent wants to perform a high-risk action:")
         if decision.command:
             print(f"  Command: {decision.command}")
@@ -310,6 +331,7 @@ class PermissionManager:
             print(f"  Path:    {decision.path}")
         print(f"  Reason:  {decision.reason}")
 
+    def _handle_confirm_prompt(self, family: str) -> bool:
         try:
             answer = self._run_input("Allow? [y/n/always/block]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -346,6 +368,7 @@ class PermissionManager:
                 self._resume_hook()
 
     def require_approval(self, decision: SecurityDecision) -> None:
+        """Raise SecurityError if the decision is not approved."""
         if not self.confirm(decision):
             raise SecurityError(decision.reason)
 
@@ -356,7 +379,7 @@ def _match_path(path: str, pattern: str) -> bool:
         return True
     if pattern.endswith("*") and path.startswith(pattern[:-1]):
         return True
-    if path.startswith(pattern + os.sep) or path.startswith(pattern + "/"):
+    if path.startswith((pattern + os.sep, pattern + "/")):
         return True
     regex = "^" + re.escape(pattern).replace(r"\*", ".*").replace(r"\?", ".") + "$"
     return bool(re.match(regex, path))

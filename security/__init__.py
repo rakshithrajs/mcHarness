@@ -1,3 +1,5 @@
+"""Security permission management for the harness agent."""
+
 from .permissions import (
     PermissionManager,
     RiskLevel,

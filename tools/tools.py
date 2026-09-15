@@ -1,6 +1,10 @@
+"""Tools for interacting with the system."""
+
 import subprocess
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
+
 from openai.types.chat import ChatCompletionToolParam
+
 from context import context
 from security import PermissionManager, SecurityError
 from security.permissions import RiskLevel
@@ -21,7 +25,7 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
                     "command": {
                         "type": "string",
                         "description": "The powershell command to run.",
-                    }
+                    },
                 },
                 "required": ["command"],
             },
@@ -38,7 +42,7 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
                     "path": {
                         "type": "string",
                         "description": "the path to the file that you want to read the contents off.",
-                    }
+                    },
                 },
                 "required": ["path"],
             },
@@ -55,7 +59,7 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
                     "name": {
                         "type": "string",
                         "description": "name of the skill to open",
-                    }
+                    },
                 },
                 "required": ["name"],
             },
@@ -65,7 +69,10 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "This tool is used to create a new a file or overwrite an existing file with completely new contnent",
+            "description": (
+                "This tool is used to create a new a file or overwrite"
+                "an existing file with completely new contnent"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -104,7 +111,10 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
                     },
                     "line_number": {
                         "type": "integer",
-                        "description": "Optional line number to scope the replacement to. Use only when old_str appears on multiple lines.",
+                        "description": (
+                            "Optional line number to scope the replacement to. "
+                            "Use only when old_str appears on multiple lines."
+                        ),
                     },
                 },
                 "required": ["path", "old_str", "new_str"],
@@ -142,7 +152,7 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
                             },
                             "required": ["content", "activeForm", "status"],
                         },
-                    }
+                    },
                 },
                 "required": ["todos"],
             },
@@ -151,7 +161,7 @@ TOOL_SCHEMAS: Iterable[ChatCompletionToolParam] = [
 ]
 
 
-def bash(command: str):
+def bash(command: str) -> str:
     """Run a shell command and return its combined stdout and stderr."""
     decision = PERMISSIONS.check_shell(command)
     if decision.risk == RiskLevel.BLOCKED:
@@ -167,12 +177,13 @@ def bash(command: str):
         encoding="utf-8",
         errors="replace",
         executable=r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+        check=False,
     )
     return (result.stdout or "") + (result.stderr or "")
 
 
 def read_file(path: str) -> str:
-    """read a file and return its contents."""
+    """Read a file and return its contents."""
     decision = PERMISSIONS.check_path(path, "read")
     if decision.risk == RiskLevel.BLOCKED:
         raise SecurityError(decision.reason)
@@ -202,7 +213,7 @@ def str_replace(
     old_str: str,
     new_str: str,
     line_number: int | None = None,
-):
+) -> str:
     """Replace old_str with new_str in a file.
 
     If line_number is provided, the match is scoped to that line.
@@ -214,7 +225,7 @@ def str_replace(
     if not PERMISSIONS.confirm(decision):
         raise SecurityError("user denied file edit")
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         lines = f.readlines()
 
     if line_number is not None:
@@ -258,5 +269,6 @@ TOOLS: dict[str, Callable[..., str]] = {
     for schema, func in zip(
         TOOL_SCHEMAS,
         [bash, read_file, read_skill, write_file, str_replace, write_todos],
+        strict=True,
     )
 }

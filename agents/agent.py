@@ -1,3 +1,5 @@
+"""Run the harness agent."""
+
 import json
 from typing import cast
 
@@ -7,6 +9,7 @@ from context import context
 from llm.llm import SYSTEM_PROMPT, call_llm
 from security import SecurityError
 from tools.tools import PERMISSIONS, TOOLS
+from utils import printer
 from utils.printer import (
     TodoFooter,
     _agent_message_panel,
@@ -14,10 +17,10 @@ from utils.printer import (
     _tool_call_panel,
     _tool_result_panel,
 )
-import utils.printer as printer
 
 
 def run_agent() -> None:
+    """Run the harness agent."""
     messages: list[ChatCompletionMessageParam] = [
         {"role": "system", "content": SYSTEM_PROMPT},
     ]
@@ -41,10 +44,13 @@ def run_agent() -> None:
             while True:
                 turn += 1
                 message, usage = call_llm(
-                    messages + [cast(ChatCompletionMessageParam, context.reminder())]
+                    [*messages, cast(ChatCompletionMessageParam, context.reminder())],
                 )
                 messages.append(
-                    cast(ChatCompletionMessageParam, message.model_dump(exclude_none=True))
+                    cast(
+                        ChatCompletionMessageParam,
+                        message.model_dump(exclude_none=True),
+                    ),
                 )
 
                 content = message.content
@@ -66,17 +72,25 @@ def run_agent() -> None:
                             result = f"SecurityError: {e.reason}"
                             footer.show(
                                 _security_block_panel(
-                                    function_name, function_arguments, str(e.reason)
-                                )
+                                    function_name,
+                                    function_arguments,
+                                    str(e.reason),
+                                ),
                             )
                         except Exception as e:
                             result = f"Error: {type(e).__name__}: {e}"
 
-                        footer.show(_tool_call_panel(function_name, function_arguments, turn=turn))
+                        footer.show(
+                            _tool_call_panel(
+                                function_name,
+                                function_arguments,
+                                turn=turn,
+                            ),
+                        )
                         footer.show(_tool_result_panel(result))
 
                         messages.append(
-                            {"role": "tool", "tool_call_id": i.id, "content": result}
+                            {"role": "tool", "tool_call_id": i.id, "content": result},
                         )
 
                 printer.usage_stats(usage)

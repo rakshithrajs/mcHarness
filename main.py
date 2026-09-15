@@ -1,7 +1,10 @@
+"""Main entry point for the harness agent."""
+
 from agents.agent import run_agent
 
 
-def main():
+def main() -> None:
+    """Run the harness agent."""
     run_agent()
 
 

@@ -5,7 +5,9 @@ description = "harness the power."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "async>=0.6.2",
     "dotenv>=0.9.9",
+    "ollama>=0.6.2",
     "openai>=3.13.0",
     "pyyaml>=6.0.3",
     "rich>=15.0.0",
@@ -22,10 +24,21 @@ build-backend = "hatchling.build"
 [tool.uv]
 package = true
 
+[tool.uv.scripts]
+lint = "ruff check ."
+format = "ruff check . --fix"
+test = "pytest --maxfail=1 --disable-warnings -q"
+all = [
+    "tool.uv.scripts:format",
+    "tool.uv.scripts:lint",
+    "tool.uv.scripts:test",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["agents", "context", "llm", "security", "skills", "tools", "utils"]
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.16.7",
 ]

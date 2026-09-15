@@ -1,3 +1,5 @@
+"""Utilities for printing formatted output to the console using Rich."""
+
 import json
 from typing import Any
 
@@ -9,6 +11,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+from tools.todos import TODOS
 
 console = Console()
 
@@ -53,10 +57,7 @@ def _tool_result_panel(result: str) -> Panel | None:
     result = result.strip()
     if not result:
         return None
-    if "\n" in result:
-        content = f"```text\n{result}\n```"
-    else:
-        content = f"`{result}`"
+    content = "```text\n<empty>\n```" if "\n" in result else f"`{result}`"
     return Panel(
         renderable=Markdown(content),
         title="Tool Result",
@@ -157,7 +158,7 @@ def raw_json(data: Any) -> None:
 
 
 def debug(data: Any) -> None:
-    """Render debug lines"""
+    """Render debug lines."""
     console.log(data)
 
 
@@ -170,11 +171,13 @@ class TodoFooter:
     """Render a sticky todo footer at the bottom of the terminal."""
 
     def __init__(self, screen: bool = False) -> None:
+        """Initialize the TodoFooter with optional screen mode."""
         self.screen = screen
         self._live: Live | None = None
         self._main: RenderableType = Text("")
 
     def __enter__(self) -> "TodoFooter":
+        """Start live updates for the footer."""
         self._live = Live(
             self._render(),
             console=console,
@@ -184,11 +187,6 @@ class TodoFooter:
         )
         self._live.start()
         return self
-
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        if self._live:
-            self._live.stop()
-            self._live = None
 
     def pause(self) -> None:
         """Stop live updates for interactive prompts."""
@@ -208,7 +206,6 @@ class TodoFooter:
         self._refresh()
 
     def _build_footer(self) -> Panel | None:
-        from tools.todos import TODOS
 
         if not TODOS:
             return None
@@ -219,7 +216,8 @@ class TodoFooter:
         for todo in TODOS:
             status = todo["status"]
             marker = {"pending": "[ ]", "in_progress": "[-]", "done": "[x]"}.get(
-                status, "[?]"
+                status,
+                "[?]",
             )
             text = f"{marker} {todo['content']}"
             if status == "done":

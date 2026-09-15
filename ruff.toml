@@ -1,0 +1,44 @@
+line-length=120
+
+[lint]
+select = [
+    "F",
+    "E",
+    "W",
+    "C90",
+    "I",
+    "N",
+    "D",
+    "UP",
+    "YTT",
+    "ANN",
+    "B",
+    "A",
+    "COM",
+    "C4",
+    "DTZ",
+    "ISC",
+    "ICN",
+    "INP",
+    "PIE",
+    "PT",
+    "RET",
+    "SIM",
+    "TID",
+    "ARG",
+    "PLC",
+    "PLE",
+    "PLR",
+    "PLW",
+    "RUF",
+]
+
+ignore = [
+    "ANN401",  # Dynamically typed expressions
+    "D202",    # No blank lines allowed after function docstring
+    "D203",    # incorrect-blank-line-before-class
+    "D205",    # 1 blank line required between summary line and description
+    "D211",    # No blank lines allowed before class docstring
+    "D212",    # multi line summary first line
+    "D213",    # multi line summary second line
+]
