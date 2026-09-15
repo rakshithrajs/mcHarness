@@ -1,5 +1,13 @@
 """Main entry point for the harness agent."""
 
+import io
+import sys
+
+# Windows terminals default to cp1252; force UTF-8 so Rich can render emoji/box chars.
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 from llm.llm import SYSTEM_PROMPT, BaseAgent, Options
 from tools import tools
 from utils import printer

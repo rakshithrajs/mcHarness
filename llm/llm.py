@@ -48,20 +48,20 @@ dotenv.load_dotenv()
 # Configure explicit Ollama clients pointing at the remote host. The module-level
 # `ollama.chat` helper defaults to localhost:11434, which is wrong for cloud models.
 _ollama_headers = {"Authorization": "Bearer " + os.environ.get("OLLAMA_API_KEY", "")}
-_ollama_client = Client(host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers)
-_ollama_async_client = AsyncClient(
+ollama_client = Client(host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers)
+ollama_async_client = AsyncClient(
     host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers
 )
 
-_chat: ChatCallable = _ollama_client.chat  # type: ignore[assignment]
-_chat_stream: ChatStreamCallable = _ollama_client.chat  # type: ignore[assignment]
-_chat_async: ChatAsyncCallable = _ollama_async_client.chat  # type: ignore[assignment]
-_chat_stream_async: ChatStreamAsyncCallable = _ollama_async_client.chat  # type: ignore[assignment]
+_chat: ChatCallable = ollama_client.chat  # type: ignore[assignment]
+_chat_stream: ChatStreamCallable = ollama_client.chat  # type: ignore[assignment]
+_chat_async: ChatAsyncCallable = ollama_async_client.chat  # type: ignore[assignment]
+_chat_stream_async: ChatStreamAsyncCallable = ollama_async_client.chat  # type: ignore[assignment]
 
-_generate: GenerateCallable = _ollama_client.generate  # type: ignore[assignment]
-_generate_stream: GenerateStreamCallable = _ollama_client.generate  # type: ignore[assignment]
-_generate_async: GenerateAsyncCallable = _ollama_async_client.generate  # type: ignore[assignment]
-_generate_stream_async: GenerateStreamAsyncCallable = _ollama_async_client.generate  # type: ignore[assignment]
+_generate: GenerateCallable = ollama_client.generate  # type: ignore[assignment]
+_generate_stream: GenerateStreamCallable = ollama_client.generate  # type: ignore[assignment]
+_generate_async: GenerateAsyncCallable = ollama_async_client.generate  # type: ignore[assignment]
+_generate_stream_async: GenerateStreamAsyncCallable = ollama_async_client.generate  # type: ignore[assignment]
 
 MAX_TOOL_ITERATIONS = 10
 
