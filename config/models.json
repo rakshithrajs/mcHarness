@@ -1,0 +1,8 @@
+{
+    "gpt": "gpt-oss:20b",
+    "glm": "glm-5.2",
+    "kimi-code": "kimi-k2.7-code",
+    "deepseek": "deepseek-v4-flash:0731",
+    "minimax": "minimax-m2.7",
+    "nemotron": "nemotron-3-nano:30b"
+}
