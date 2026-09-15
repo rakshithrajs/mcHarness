@@ -10,6 +10,7 @@ from context import context
 from security import PermissionManager, SecurityError
 from security.permissions import RiskLevel
 from skills.skills import read_skill
+from tools.calculate import calculate
 from tools.todos import write_todos
 
 PERMISSIONS = PermissionManager.from_environment()
@@ -23,6 +24,7 @@ def bash(command: str) -> str:
 
     Returns:
         The combined stdout and stderr from the command.
+
     """
     decision = PERMISSIONS.check_shell(command)
     if decision.risk == RiskLevel.BLOCKED:
@@ -51,6 +53,7 @@ def read_file(path: str) -> str:
 
     Returns:
         The contents of the file.
+
     """
     decision = PERMISSIONS.check_path(path, "read")
     if decision.risk == RiskLevel.BLOCKED:
@@ -72,6 +75,7 @@ def write_file(path: str, content: str) -> str:
 
     Returns:
         A confirmation message.
+
     """
     decision = PERMISSIONS.check_path(path, "write")
     if decision.risk == RiskLevel.BLOCKED:
@@ -100,6 +104,7 @@ def str_replace(
 
     Returns:
         A confirmation or error message.
+
     """
     decision = PERMISSIONS.check_path(path, "edit")
     if decision.risk == RiskLevel.BLOCKED:
@@ -151,6 +156,7 @@ _TOOL_FUNCTIONS: Sequence[Callable[..., str]] = [
     write_file,
     str_replace,
     write_todos,
+    calculate,
 ]
 
 OLLAMA_TOOLS: Sequence[OllamaTool] = [
