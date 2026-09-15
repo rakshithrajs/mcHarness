@@ -11,7 +11,7 @@ from collections.abc import (
     Sequence,
 )
 from dataclasses import dataclass, field
-from typing import Any, Literal, Optional, Union, cast
+from typing import Any, Literal, cast
 
 import dotenv
 from ollama import AsyncClient, ChatResponse, Client, GenerateResponse
@@ -50,7 +50,7 @@ dotenv.load_dotenv()
 _ollama_headers = {"Authorization": "Bearer " + os.environ.get("OLLAMA_API_KEY", "")}
 ollama_client = Client(host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers)
 ollama_async_client = AsyncClient(
-    host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers
+    host=os.getenv("OLLAMA_HOST"), headers=_ollama_headers,
 )
 
 _chat: ChatCallable = ollama_client.chat  # type: ignore[assignment]
@@ -92,15 +92,15 @@ class Options:
     # system prompt to use for the agent.
     system_prompt: str
     # model name to use for the agent.
-    model: Optional[str] = None
+    model: str | None = None
     # tools for the agent to use.
-    tools: Optional[Sequence[OllamaTool | Mapping[str, Any]]] = None
+    tools: Sequence[OllamaTool | Mapping[str, Any]] | None = None
     # stream the agent's response as it is generated.
     stream: bool = False
     # think enables the agent to reason about its actions before taking them.
-    think: Optional[Union[bool, Literal["low", "medium", "high"]]] = None
+    think: bool | Literal["low", "medium", "high"] | None = None
     # format specification for the agent's response.
-    format: Optional[Union[Literal["", "json"], dict[str, Any]]] = None
+    format: Literal["", "json"] | dict[str, Any] | None = None
 
     """
     Internal generation controls. These values are forwarded to the underlying
@@ -108,23 +108,23 @@ class Options:
     """
 
     # Sampling randomness or how cretive a model should be in [0.0, 2.0], e.g. 0.7.
-    temperature: Optional[float] = None
+    temperature: float | None = None
     # Maximum number of tokens to generate for the completion, e.g. 256.
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
     # Nucleus sampling threshold. Lower values make the model choose more likely
     # next tokens; higher values allow more diversity. Example: 0.9.
-    top_p: Optional[float] = None
+    top_p: float | None = None
     # Stop sequences tell the model when to halt generation early. Example: ("\n\n", "END").
-    stop: Optional[Sequence[str]] = None
+    stop: Sequence[str] | None = None
     # Seed for deterministic sampling when supported by the provider, e.g. 1234.
-    seed: Optional[int] = None
+    seed: int | None = None
     # Penalizes repeating tokens too frequently in the output. Example: 0.5.
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: float | None = None
     # Penalizes introducing tokens that are not already present in the prompt. Example: 0.2.
-    presence_penalty: Optional[float] = None
+    presence_penalty: float | None = None
 
     # options dictionary to be passed to the LLM provider. This is constructed from the above fields.
-    options: Optional[OllamaOptions] = field(default=None, init=False)
+    options: OllamaOptions | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         if self.model is None:
@@ -154,10 +154,10 @@ class BaseAgent:
 
     def __init__(self, options: Options) -> None:
         options.model = model_select(
-            options.model or os.environ.get("OLLAMA_LANG_MODEL", default="glm")
+            options.model or os.environ.get("OLLAMA_LANG_MODEL", default="glm"),
         )
         self.options = options
-        self.messages: list[Union[Mapping[str, Any], OllamaMessage]] = []
+        self.messages: list[Mapping[str, Any] | OllamaMessage] = []
         if options.system_prompt:
             self.messages.append({"role": "system", "content": options.system_prompt})
 
@@ -182,10 +182,10 @@ class BaseAgent:
         self.messages.clear()
         if self.options.system_prompt:
             self.messages.append(
-                {"role": "system", "content": self.options.system_prompt}
+                {"role": "system", "content": self.options.system_prompt},
             )
 
-    def _build_messages(self) -> list[Union[Mapping[str, Any], OllamaMessage]]:
+    def _build_messages(self) -> list[Mapping[str, Any] | OllamaMessage]:
         """Return current messages with the latest context reminder appended."""
         return [*self.messages, context.reminder()]
 
@@ -278,7 +278,7 @@ class BaseAgent:
         return response
 
     async def generate_stream_async(
-        self, prompt: str
+        self, prompt: str,
     ) -> AsyncIterator[GenerateResponse]:
         """Generate an async streaming response for the given prompt."""
         stream = await _generate_stream_async(
