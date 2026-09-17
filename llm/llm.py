@@ -132,6 +132,9 @@ class Options:
         if self.model is None:
             self.model = os.environ.get("OLLAMA_LANG_MODEL", default="glm")
 
+    def ollama_options(self) -> OllamaOptions:
+        """Dynamically construct the options dictionary for the LLM provider."""
+
         opts = cast(OllamaOptions, {})
         if self.temperature is not None:
             opts["temperature"] = self.temperature
@@ -149,6 +152,7 @@ class Options:
         if self.presence_penalty is not None:
             opts["presence_penalty"] = self.presence_penalty
         self.options = opts
+        return opts
 
 
 class BaseAgent:
