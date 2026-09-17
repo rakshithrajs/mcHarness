@@ -34,7 +34,7 @@ def git_branch() -> str:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        errors="repalce",
+        errors="replace",
         executable=r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
         check=False,
     )
@@ -63,7 +63,7 @@ def stale_note() -> str:
     if not changed:
         return ""
     return (
-        "\n<systen_reminder>\n"
+        "\n<system_reminder>\n"
         "These files changed on disk since you read them. Read them again "
         "before editing: \n" + "\n".join(changed) + "\n</system_reminder>"
     )

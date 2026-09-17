@@ -12,9 +12,9 @@ def model_select(model_name: str) -> str:
         with open(MODEL_FILE_PATH, encoding="utf-8") as file:
             models: dict[str, str] = json.load(file)
     except FileNotFoundError as exc:
-        raise exc from FileNotFoundError(
+        raise FileNotFoundError(
             f"Model file not found at {MODEL_FILE_PATH}. Please ensure the file exists.",
-        )
+        ) from exc
 
     if model_name in models:
         return models[model_name]

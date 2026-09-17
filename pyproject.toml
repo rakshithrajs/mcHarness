@@ -10,12 +10,15 @@ dependencies = [
     "ollama>=0.6.2",
     "pyyaml>=6.0.3",
     "rich>=15.0.0",
+    "textual>=8.2.8",
+    "textual-dev>=1.8.0",
     "tzdata>=2025.2",
 ]
 
 [project.scripts]
 status = "utils.helpers:status"
 harness = "main:main"
+harness-tui = "ui.app:run"
 
 [build-system]
 requires = ["hatchling"]
@@ -25,7 +28,7 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["context", "llm", "security", "skills", "tools", "utils"]
+packages = ["context", "llm", "security", "skills", "tools", "ui", "utils"]
 
 [dependency-groups]
 dev = [
