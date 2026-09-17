@@ -163,3 +163,7 @@ tempCodeRunnerFile.py
 
 # PyPI configuration file
 .pypirc
+
+# agents
+.claude
+.codegraph
