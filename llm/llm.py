@@ -154,7 +154,12 @@ class Options:
 class BaseAgent:
     """Stateful agent that manages conversation history and tool calling."""
 
-    def __init__(self, options: Options) -> None:
+    def __init__(
+        self,
+        options: Options,
+        on_tool_call: Callable[[str, dict[str, Any]], None] | None = None,
+        on_tool_result: Callable[[str], None] | None = None,
+    ) -> None:
         """Initialize the agent with the given options."""
         options.model = model_select(
             options.model or os.environ.get("OLLAMA_LANG_MODEL", default="glm"),
@@ -163,6 +168,8 @@ class BaseAgent:
         self.messages: list[Mapping[str, Any] | OllamaMessage] = []
         if options.system_prompt:
             self.messages.append({"role": "system", "content": options.system_prompt})
+        self._on_tool_call = on_tool_call
+        self._on_tool_result = on_tool_result
 
     def add_message(self, role: str, content: str, **kwargs: Any) -> None:
         """Append a raw message to the conversation history."""
@@ -307,7 +314,12 @@ class BaseAgent:
                 if isinstance(raw_arguments, str)
                 else dict(raw_arguments)
             )
-            return str(tools.TOOLS[name](**arguments))
+            if self._on_tool_call is not None:
+                self._on_tool_call(name, arguments)
+            result = str(tools.TOOLS[name](**arguments))
+            if self._on_tool_result is not None:
+                self._on_tool_result(result)
+            return result
         except SecurityError as e:
             return f"SecurityError: {e.reason}"
         except Exception as e:

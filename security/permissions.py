@@ -2,7 +2,8 @@
 
 import os
 import re
-from collections.abc import Callable
+import threading
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PureWindowsPath
@@ -146,10 +147,17 @@ class PermissionManager:
     def __init__(self, config: SecurityConfig | None = None) -> None:
         """Initialize the permission manager with a configuration."""
         self.config = config or _default_config()
+        self._blocked_token_patterns: list[tuple[re.Pattern[str], str]] = [
+            (_shell_token_regex(tok), tok) for tok in self.config.blocked_shell_tokens
+        ]
         self._approved_families: set[str] = set()
         self._blocked_families: set[str] = set()
         self._pause_hook: Callable[[], None] | None = None
         self._resume_hook: Callable[[], None] | None = None
+        self._async_confirm_callback: Callable[[SecurityDecision], Awaitable[bool]] | None = None
+        self._tui_confirm_sender: Callable[[SecurityDecision], None] | None = None
+        self._tui_confirm_event: threading.Event | None = None
+        self._tui_confirm_result: bool | str = False
 
     @classmethod
     def from_environment(cls, project_root: Path | None = None) -> "PermissionManager":
@@ -215,8 +223,8 @@ class PermissionManager:
 
         lower = command.lower()
 
-        for token in self.config.blocked_shell_tokens:
-            if token.lower() in lower:
+        for pattern, token in self._blocked_token_patterns:
+            if pattern.search(lower):
                 return SecurityDecision(
                     RiskLevel.BLOCKED,
                     f"blocked shell token '{token}' detected",
@@ -335,25 +343,46 @@ class PermissionManager:
         if family in self._blocked_families:
             return False
 
+        if self._tui_confirm_sender is not None:
+            return self._tui_confirm(decision, family)
+
+        return self._console_confirm(decision, family)
+
+    def _console_confirm(self, decision: SecurityDecision, family: str) -> bool:
+        """Console confirmation via ``input()``."""
         self._print_decision(decision)
-        return self._handle_confirm_prompt(family)
-
-    def _print_decision(self, decision: SecurityDecision) -> None:
-        print("\n[SECURITY] The agent wants to perform a high-risk action:")
-        if decision.command:
-            print(f"  Command: {decision.command}")
-        if decision.path:
-            print(f"  Path:    {decision.path}")
-        print(f"  Reason:  {decision.reason}")
-
-    def _handle_confirm_prompt(self, family: str) -> bool:
         try:
             answer = self._run_input("Allow? [y/n/always/block]: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             print("  -> denied (no input)")
             return False
+        return self._apply_answer(answer, family)
 
-        if answer in ("y", "yes"):
+    def _tui_confirm(self, decision: SecurityDecision, family: str) -> bool:
+        """Block the calling thread until the TUI resolves a confirmation dialog."""
+        event = threading.Event()
+        self._tui_confirm_event = event
+        self._tui_confirm_result = False
+        self._tui_confirm_sender(decision)
+        event.wait()
+        return self._apply_answer(self._tui_confirm_result, family)
+
+    def set_tui_confirm_sender(
+        self,
+        sender: Callable[[SecurityDecision], None] | None,
+    ) -> None:
+        """Register a callback that schedules a TUI confirmation dialog on the main thread."""
+        self._tui_confirm_sender = sender
+
+    def resolve_tui_confirm(self, result: bool | str) -> None:
+        """Resolve an in-flight TUI confirmation with the user's choice."""
+        self._tui_confirm_result = result
+        if self._tui_confirm_event is not None:
+            self._tui_confirm_event.set()
+
+    def _apply_answer(self, answer: bool | str, family: str) -> bool:
+        """Map a confirmation answer to a boolean and update family rules."""
+        if answer is True or (isinstance(answer, str) and answer in ("y", "yes")):
             return True
         if answer == "always":
             self._approved_families.add(family)
@@ -363,6 +392,14 @@ class PermissionManager:
             return False
         return False
 
+    def _print_decision(self, decision: SecurityDecision) -> None:
+        print("\n[SECURITY] The agent wants to perform a high-risk action:")
+        if decision.command:
+            print(f"  Command: {decision.command}")
+        if decision.path:
+            print(f"  Path:    {decision.path}")
+        print(f"  Reason:  {decision.reason}")
+
     def set_prompt_hooks(
         self,
         pause: Callable[[], None] | None = None,
@@ -371,6 +408,32 @@ class PermissionManager:
         """Register hooks to pause/resume live terminal rendering around ``input()`` prompts."""
         self._pause_hook = pause
         self._resume_hook = resume
+
+    def set_async_confirm_callback(
+        self,
+        callback: Callable[[SecurityDecision], Awaitable[bool]] | None,
+    ) -> None:
+        """Register an async callback that renders a confirmation UI and returns the user's choice."""
+        self._async_confirm_callback = callback
+
+    async def confirm_async(self, decision: SecurityDecision) -> bool:
+        """Async version of ``confirm`` suitable for event-loop environments like a TUI."""
+        if decision.risk == RiskLevel.BLOCKED:
+            return False
+        if decision.risk == RiskLevel.SAFE:
+            return True
+
+        family = self._family(decision.command or decision.path or "")
+        if family in self._approved_families:
+            return True
+        if family in self._blocked_families:
+            return False
+
+        if self._async_confirm_callback is None:
+            answer = self.confirm(decision)
+        else:
+            answer = await self._async_confirm_callback(decision)
+        return self._apply_answer(answer, family)
 
     def _run_input(self, prompt: str) -> str:
         """Run ``input()`` safely when a live display may be active."""
@@ -386,6 +449,22 @@ class PermissionManager:
         """Raise SecurityError if the decision is not approved."""
         if not self.confirm(decision):
             raise SecurityError(decision.reason)
+
+
+def _shell_token_regex(token: str) -> re.Pattern[str]:
+    r"""Compile a blocked-shell-token pattern with word boundaries on word-char edges.
+
+    A naive ``token in command`` substring check produces false positives: ``rm``
+    matches inside ``format``, ``del`` inside ``model``, etc. We anchor each edge
+    with ``\\b`` only when it is a word character (alphanumeric or underscore) so
+    that short alpha tokens can't match inside longer words, while tokens that
+    start or end with non-word characters (e.g. ``-enc ``, ``-EncodedCommand``)
+    still match as written.
+    """
+    escaped = re.escape(token)
+    start = r"\b" if token[:1].isalnum() or token[:1] == "_" else ""
+    end = r"\b" if token[-1:].isalnum() or token[-1:] == "_" else ""
+    return re.compile(f"{start}{escaped}{end}")
 
 
 def _match_path(path: str, pattern: str) -> bool:
