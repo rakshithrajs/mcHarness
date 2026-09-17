@@ -142,8 +142,6 @@ class HarnessApp(App):
                 system_prompt=SYSTEM_PROMPT,
                 tools=tools.OLLAMA_TOOLS,
             ),
-            on_tool_call=self._on_tool_call,
-            on_tool_result=self._on_tool_result,
         )
 
     def _setup_permission_sender(self) -> None:
@@ -219,8 +217,11 @@ class HarnessApp(App):
     async def _run_agent_turn(self, user_input: str) -> None:
         """Run the agent turn in a worker and post the result back to the UI."""
         try:
-            response = await self.agent.run_turn_async(user_input)
+            response, events = await self.agent.run_turn_async(user_input)
             content = response.message.content or ""
+            for event in events:
+                self.post_message(ToolCallMessage(event.name, event.arguments))
+                self.post_message(ToolResultMessage(event.result))
         except Exception as exc:
             content = f"Error: {type(exc).__name__}: {exc}"
         finally:
@@ -262,13 +263,6 @@ class HarnessApp(App):
         )
         chat.scroll_end(animate=False)
 
-    def _on_tool_call(self, name: str, arguments: dict[str, Any]) -> None:
-        """Post a tool invocation to the UI thread."""
-        self.post_message(ToolCallMessage(name, arguments))
-
-    def _on_tool_result(self, result: str) -> None:
-        """Post a tool result to the UI thread."""
-        self.post_message(ToolResultMessage(result))
 
     def on_tool_call_message(self, message: ToolCallMessage) -> None:
         """Render a tool call as an inline collapsible in the chat."""

@@ -11,7 +11,7 @@ from collections.abc import (
     Sequence,
 )
 from dataclasses import dataclass, field
-from typing import Any, Literal, cast
+from typing import Any, Literal, NamedTuple, cast
 
 import dotenv
 from ollama import AsyncClient, ChatResponse, Client, GenerateResponse
@@ -65,6 +65,15 @@ _generate_async: GenerateAsyncCallable = ollama_async_client.generate  # type: i
 _generate_stream_async: GenerateStreamAsyncCallable = ollama_async_client.generate  # type: ignore[assignment]
 
 MAX_TOOL_ITERATIONS = 10
+
+
+class ToolEvent(NamedTuple):
+    """One tool invocation observed during a user turn."""
+
+    name: str
+    arguments: Mapping[str, Any]
+    result: str
+
 
 SYSTEM_PROMPT = f"""
 You are a coding agent. Your job is to code, always code.
@@ -161,8 +170,6 @@ class BaseAgent:
     def __init__(
         self,
         options: Options,
-        on_tool_call: Callable[[str, dict[str, Any]], None] | None = None,
-        on_tool_result: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize the agent with the given options."""
         options.model = model_select(
@@ -172,8 +179,6 @@ class BaseAgent:
         self.messages: list[Mapping[str, Any] | OllamaMessage] = []
         if options.system_prompt:
             self.messages.append({"role": "system", "content": options.system_prompt})
-        self._on_tool_call = on_tool_call
-        self._on_tool_result = on_tool_result
 
     def add_message(self, role: str, content: str, **kwargs: Any) -> None:
         """Append a raw message to the conversation history."""
@@ -318,19 +323,55 @@ class BaseAgent:
                 if isinstance(raw_arguments, str)
                 else dict(raw_arguments)
             )
-            if self._on_tool_call is not None:
-                self._on_tool_call(name, arguments)
-            result = str(tools.TOOLS[name](**arguments))
-            if self._on_tool_result is not None:
-                self._on_tool_result(result)
-            return result
+            return str(tools.TOOLS[name](**arguments))
         except SecurityError as e:
             return f"SecurityError: {e.reason}"
         except Exception as e:
             return f"Error: {type(e).__name__}: {e}"
 
-    def run_turn(self, user_input: str) -> ChatResponse:
-        """Run one user turn, including any tool calls, and return the final response."""
+    def _run_tools(
+        self,
+        response: ChatResponse,
+        events: list[ToolEvent],
+    ) -> ChatResponse:
+        """Execute all tool calls in a response, append results, and chat again."""
+        if not response.message.tool_calls:
+            return response
+        for call in response.message.tool_calls:
+            result = self._execute_tool(call)
+            events.append(
+                ToolEvent(
+                    name=call.function.name,
+                    arguments=call.function.arguments,
+                    result=result,
+                ),
+            )
+            self.add_tool_result(result)
+        return self.chat()
+
+    async def _run_tools_async(
+        self,
+        response: ChatResponse,
+        events: list[ToolEvent],
+    ) -> ChatResponse:
+        """Execute all tool calls in a response, append results, and chat again (async)."""
+        if not response.message.tool_calls:
+            return response
+        for call in response.message.tool_calls:
+            result = self._execute_tool(call)
+            events.append(
+                ToolEvent(
+                    name=call.function.name,
+                    arguments=call.function.arguments,
+                    result=result,
+                ),
+            )
+            self.add_tool_result(result)
+        return await self.chat_async()
+
+    def run_turn(self, user_input: str) -> tuple[ChatResponse, list[ToolEvent]]:
+        """Run one user turn, including any tool calls, and return the final response plus events."""
+        events: list[ToolEvent] = []
         self.add_user_message(user_input)
         response = self.chat()
         self.add_assistant_message(response)
@@ -338,16 +379,17 @@ class BaseAgent:
         for _ in range(MAX_TOOL_ITERATIONS):
             if not response.message.tool_calls:
                 break
-            for call in response.message.tool_calls:
-                result = self._execute_tool(call)
-                self.add_tool_result(result)
-            response = self.chat()
+            response = self._run_tools(response, events)
             self.add_assistant_message(response)
 
-        return response
+        return response, events
 
-    async def run_turn_async(self, user_input: str) -> ChatResponse:
-        """Run one async user turn, including any tool calls, and return the final response."""
+    async def run_turn_async(
+        self,
+        user_input: str,
+    ) -> tuple[ChatResponse, list[ToolEvent]]:
+        """Run one async user turn, including any tool calls, and return the final response plus events."""
+        events: list[ToolEvent] = []
         self.add_user_message(user_input)
         response = await self.chat_async()
         self.add_assistant_message(response)
@@ -355,10 +397,7 @@ class BaseAgent:
         for _ in range(MAX_TOOL_ITERATIONS):
             if not response.message.tool_calls:
                 break
-            for call in response.message.tool_calls:
-                result = self._execute_tool(call)
-                self.add_tool_result(result)
-            response = await self.chat_async()
+            response = await self._run_tools_async(response, events)
             self.add_assistant_message(response)
 
-        return response
+        return response, events

@@ -16,9 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-status = "utils.helpers:status"
 harness = "main:main"
-harness-tui = "ui.app:run"
 
 [build-system]
 requires = ["hatchling"]
