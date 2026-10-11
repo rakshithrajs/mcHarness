@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from textual.app import App, ComposeResult
+from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.message import Message
@@ -23,7 +24,7 @@ from textual.widgets import (
 )
 
 from context import context
-from llm.llm import SYSTEM_PROMPT, BaseAgent, Options
+from llm.llm import SYSTEM_PROMPT, BaseAgent, Options, ToolEvent
 from security.permissions import SecurityDecision
 from tools import tools
 from tools.todos import TODOS
@@ -35,8 +36,25 @@ _MAX_TOOL_RESULT_SNIPPET = 400
 class AgentFinished(Message):
     """Posted when an agent turn completes."""
 
+    def __init__(self) -> None:
+        """Initialize the completion message."""
+        super().__init__()
+
+
+class ThinkingMessage(Message):
+    """Posted when a new chunk of thinking text is available."""
+
     def __init__(self, content: str) -> None:
-        """Store the final assistant content."""
+        """Store the accumulated thinking content."""
+        self.content = content
+        super().__init__()
+
+
+class ContentMessage(Message):
+    """Posted when a new chunk of response content is available."""
+
+    def __init__(self, content: str) -> None:
+        """Store the accumulated response content."""
         self.content = content
         super().__init__()
 
@@ -60,7 +78,7 @@ class ToolResultMessage(Message):
         super().__init__()
 
 
-class HarnessApp(App):
+class HarnessApp(App[None]):
     """Terminal UI for running the harness agent."""
 
     CSS = """
@@ -120,9 +138,15 @@ class HarnessApp(App):
     .tool-call Static {
         padding: 0 1 0 1;
     }
+    .thinking-message {
+        margin: 0 1 1 1;
+        padding: 0 1 0 1;
+        color: $text-muted;
+        border-left: outer $warning;
+    }
     """
 
-    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         ("ctrl+c", "quit", "Quit"),
         ("ctrl+r", "reset", "Reset"),
         ("ctrl+l", "clear", "Clear"),
@@ -136,11 +160,14 @@ class HarnessApp(App):
         super().__init__(**kwargs)
         self._agent_busy = False
         self._pending_tool_collapsible: Collapsible | None = None
+        self._current_thinking: Static | None = None
+        self._current_response: Static | None = None
         self._setup_permission_sender()
         self.agent = BaseAgent(
             Options(
                 system_prompt=SYSTEM_PROMPT,
                 tools=tools.OLLAMA_TOOLS,
+                think=True,
             ),
         )
 
@@ -206,6 +233,8 @@ class HarnessApp(App):
         self._agent_busy = True
         self._turn += 1
         self._pending_tool_collapsible = None
+        self._current_thinking = None
+        self._current_response = None
 
         self._append_user_message(user_text)
         self.status_text = (
@@ -215,23 +244,30 @@ class HarnessApp(App):
         self.run_worker(self._run_agent_turn(user_text), exclusive=True)
 
     async def _run_agent_turn(self, user_input: str) -> None:
-        """Run the agent turn in a worker and post the result back to the UI."""
+        """Run the agent turn in a worker, streaming events back to the UI."""
         try:
-            response, events = await self.agent.run_turn_async(user_input)
-            content = response.message.content or ""
-            for event in events:
-                self.post_message(ToolCallMessage(event.name, event.arguments))
-                self.post_message(ToolResultMessage(event.result))
+            async for event in self.agent.run_turn_stream_async(user_input):
+                if event.kind == "thinking":
+                    self.post_message(ThinkingMessage(str(event.data)))
+                elif event.kind == "content":
+                    self.post_message(ContentMessage(str(event.data)))
+                elif event.kind == "tool_call":
+                    tool_event = cast(ToolEvent, event.data)
+                    self.post_message(ToolCallMessage(tool_event.name, dict(tool_event.arguments)))
+                elif event.kind == "tool_result":
+                    tool_event = cast(ToolEvent, event.data)
+                    self.post_message(ToolResultMessage(tool_event.result))
         except Exception as exc:
-            content = f"Error: {type(exc).__name__}: {exc}"
+            self.post_message(ContentMessage(f"Error: {type(exc).__name__}: {exc}"))
         finally:
             self._agent_busy = False
 
-        self.post_message(AgentFinished(content))
+        self.post_message(AgentFinished())
 
-    def on_agent_finished(self, message: AgentFinished) -> None:
-        """Render the agent response and restore the input box."""
-        self._append_agent_message(message.content)
+    def on_agent_finished(self, _message: AgentFinished) -> None:
+        """Finalize the turn and restore the input box."""
+        self._current_thinking = None
+        self._current_response = None
         self._refresh_todos()
         input_widget = self.query_one("#user-input", Input)
         input_widget.disabled = False
@@ -252,17 +288,35 @@ class HarnessApp(App):
         )
         chat.scroll_end(animate=False)
 
-    def _append_agent_message(self, content: str) -> None:
-        """Add an agent message bubble to the chat."""
+    def on_thinking_message(self, message: ThinkingMessage) -> None:
+        """Update or create the thinking panel for the current turn."""
         chat = self.query_one("#chat-scroll", VerticalScroll)
-        chat.mount(
-            Static(
-                f"[b]Agent[/b] (turn {self._turn})\n{content}",
-                classes="agent-message",
-            ),
-        )
+        if self._current_thinking is None:
+            self._current_thinking = Static(
+                f"[b]Thinking[/b] (turn {self._turn})\n{message.content}",
+                classes="thinking-message",
+            )
+            chat.mount(self._current_thinking)
+        else:
+            self._current_thinking.update(
+                f"[b]Thinking[/b] (turn {self._turn})\n{message.content}",
+            )
         chat.scroll_end(animate=False)
 
+    def on_content_message(self, message: ContentMessage) -> None:
+        """Update or create the agent response panel for the current turn."""
+        chat = self.query_one("#chat-scroll", VerticalScroll)
+        if self._current_response is None:
+            self._current_response = Static(
+                f"[b]Agent[/b] (turn {self._turn})\n{message.content}",
+                classes="agent-message",
+            )
+            chat.mount(self._current_response)
+        else:
+            self._current_response.update(
+                f"[b]Agent[/b] (turn {self._turn})\n{message.content}",
+            )
+        chat.scroll_end(animate=False)
 
     def on_tool_call_message(self, message: ToolCallMessage) -> None:
         """Render a tool call as an inline collapsible in the chat."""

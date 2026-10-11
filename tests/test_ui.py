@@ -1,10 +1,19 @@
 """Tests for the Textual TUI."""
 
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from llm.llm import TurnStreamEvent
 from ui.app import HarnessApp, ToolCallMessage, ToolResultMessage
+
+
+async def _mock_stream(response_content: str) -> AsyncIterator[TurnStreamEvent]:
+    """Yield a simple streaming turn with one content chunk and a done event."""
+    response = mock_response(response_content)
+    yield TurnStreamEvent("content", response_content)
+    yield TurnStreamEvent("done", response)
 
 
 def mock_response(content: str) -> AsyncMock:
@@ -24,7 +33,7 @@ def app() -> HarnessApp:
     ):
         instance = mock_agent_class.return_value
         instance.options.model = "test-model"
-        instance.run_turn_async = AsyncMock(return_value=(mock_response("Hello!"), []))
+        instance.run_turn_stream_async = lambda _user_input: _mock_stream("Hello!")
         yield HarnessApp()
 
 

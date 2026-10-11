@@ -75,6 +75,13 @@ class ToolEvent(NamedTuple):
     result: str
 
 
+class TurnStreamEvent(NamedTuple):
+    """One event yielded by the streaming turn runner."""
+
+    kind: Literal["thinking", "content", "tool_call", "tool_result", "done"]
+    data: str | ToolEvent | ChatResponse
+
+
 SYSTEM_PROMPT = f"""
 You are a coding agent. Your job is to code, always code.
 Use the bash tool to inspect files.
@@ -401,3 +408,67 @@ class BaseAgent:
             self.add_assistant_message(response)
 
         return response, events
+
+    async def run_turn_stream_async(
+        self,
+        user_input: str,
+    ) -> AsyncIterator[TurnStreamEvent]:
+        """Run one async user turn, streaming thinking/content and tool events.
+
+        Yields ``thinking`` and ``content`` events with the accumulated text so far,
+        ``tool_call``/``tool_result`` events when the model invokes tools, and a final
+        ``done`` event carrying the last ChatResponse.
+        """
+        self.add_user_message(user_input)
+
+        for _ in range(MAX_TOOL_ITERATIONS):
+            thinking_acc = ""
+            content_acc = ""
+            final_response: ChatResponse | None = None
+
+            stream = await _chat_stream_async(
+                model=cast(str, self.options.model),
+                messages=self._build_messages(),
+                tools=self.options.tools,
+                stream=True,
+                think=self.options.think,
+                format=self.options.format,
+                options=self.options.options,
+            )
+
+            meaningful_chunk: ChatResponse | None = None
+            async for chunk in stream:
+                has_thinking = chunk.message.thinking is not None
+                has_content = chunk.message.content is not None
+                has_tool_calls = chunk.message.tool_calls
+
+                if has_thinking or has_content or has_tool_calls:
+                    meaningful_chunk = chunk
+
+                if has_thinking:
+                    thinking_acc += chunk.message.thinking
+                    yield TurnStreamEvent("thinking", thinking_acc)
+                if has_content:
+                    content_acc += chunk.message.content
+                    yield TurnStreamEvent("content", content_acc)
+
+            if meaningful_chunk is None:
+                return
+            final_response = meaningful_chunk
+
+            self.add_assistant_message(final_response)
+
+            if not final_response.message.tool_calls:
+                yield TurnStreamEvent("done", final_response)
+                return
+
+            for call in final_response.message.tool_calls:
+                result = self._execute_tool(call)
+                tool_event = ToolEvent(
+                    name=call.function.name,
+                    arguments=call.function.arguments,
+                    result=result,
+                )
+                yield TurnStreamEvent("tool_call", tool_event)
+                self.add_tool_result(result)
+                yield TurnStreamEvent("tool_result", tool_event)
